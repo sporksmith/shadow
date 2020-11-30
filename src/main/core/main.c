@@ -19,6 +19,7 @@
 #include "main/core/support/configuration.h"
 #include "main/core/support/options.h"
 #include "main/utility/utility.h"
+#include "main/utility/timing.h"
 #include "main/shmem/shmem_cleanup.h"
 #include "igraph_version.h"
 #include "shd-config.h"
@@ -239,6 +240,8 @@ gint main_runShadow(gint argc, gchar* argv[]) {
 
     // before we run the simluation, clean up any orphaned shared memory
     shmemcleanup_tryCleanup();
+
+    atexit(print_durations);
 
     gint returnCode = _main_helper(options);
 
