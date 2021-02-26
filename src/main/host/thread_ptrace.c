@@ -217,6 +217,9 @@ typedef struct _ThreadPtrace {
 
     // Enable syscall handling via IPC.
     bool enableIpc;
+
+//    long reasonCounts[STOPREASON_UNKNOWN + 1];
+//    long ptraceSyscallCounts[1000];
 } ThreadPtrace;
 
 static struct IPCData* _threadptrace_ipcData(ThreadPtrace* thread) {
@@ -310,6 +313,7 @@ static pid_t _threadptrace_fork_exec(const char* file, char* const argv[],
         case 0: {
             // child
  
+#if 1
             // Ensure that the child process exits when Shadow does.  Shadow
             // ought to have already tried to terminate the child via SIGTERM
             // before shutting down (though see
@@ -330,16 +334,19 @@ static pid_t _threadptrace_fork_exec(const char* file, char* const argv[],
                 error("prctl: %s", g_strerror(errno));
                 return -1;
             }
+#endif
             // Allow parent to trace.
             if (ptrace(PTRACE_TRACEME, 0, 0, 0) < 0) {
                 error("ptrace: %s", g_strerror(errno));
                 return -1;
             }
+#if 1
             // Wait for parent to attach.
             if (raise(SIGSTOP) < 0) {
                 error("raise: %s", g_strerror(errno));
                 return -1;
             }
+#endif
             if (execvpe(file, argv, envp) < 0) {
                 error("execvpe: %s", g_strerror(errno));
                 return -1;
@@ -514,6 +521,7 @@ static pid_t _waitpid_spin(pid_t pid, int *wstatus, int options) {
     pid_t rv = 0;
     // First do non-blocking waits.
     do {
+        sched_yield();
         rv = waitpid(pid, wstatus, options|WNOHANG);
     } while (rv == 0 && count++ < THREADPTRACE_MAX_SPIN);
 
@@ -558,7 +566,10 @@ static StopReason _threadptrace_hybridSpin(ThreadPtrace* thread) {
         // way, though. According to wait(2), threads can wait on children of
         // other threads in the same thread group, but I wouldn't be surprised
         // if ptrace events are a special case.
+        sched_yield();
         int wstatus;
+        //pid_t pid = syscall(SYS_wait4, thread->base.nativeTid, &wstatus,0, NULL);
+        //pid_t pid = waitpid(thread->base.nativeTid, &wstatus,0);
         pid_t pid = waitpid(thread->base.nativeTid, &wstatus, WNOHANG);
         if (pid < 0) {
             error("waitpid: %s", strerror(pid));
@@ -607,7 +618,13 @@ static StopReason _threadptrace_hybridSpin(ThreadPtrace* thread) {
 
 static void _threadptrace_nextChildState(ThreadPtrace* thread) {
     StopReason reason = _threadptrace_hybridSpin(thread);
+    //++thread->reasonCounts[reason.type];
     _threadptrace_updateChildState(thread, reason);
+    /*
+    if (reason.type == STOPREASON_SYSCALL) {
+        ++thread->ptraceSyscallCounts[thread->syscall_args.number];
+    }
+    */
 }
 
 pid_t threadptrace_run(Thread* base, gchar** argv, gchar** envv) {
@@ -970,6 +987,27 @@ bool threadptrace_isRunning(Thread* base) {
 
 void threadptrace_terminate(Thread* base) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
+#if 0
+#define DO(x) fprintf(stderr, #x ": %ld\n", thread->reasonCounts[x])
+    DO(STOPREASON_EXITED_NORMAL);
+    DO(STOPREASON_EXITED_NORMAL);
+    DO(STOPREASON_EXITED_SIGNAL);
+    DO(STOPREASON_SIGNAL);
+    DO(STOPREASON_SYSCALL);
+    DO(STOPREASON_SHIM_EVENT);
+    DO(STOPREASON_EXEC);
+    DO(STOPREASON_CONTINUED);
+    DO(STOPREASON_UNKNOWN);
+    warning("Forcing flush");
+#undef DO
+
+    for (int i = 0; i < 1000; ++i) {
+        if (thread->ptraceSyscallCounts[i] != 0) {
+            fprintf(stderr, "Syscall %d: %ld\n", i, thread->ptraceSyscallCounts[i]);
+        }
+    }
+#endif
+
 
     /* make sure we cleanup circular refs */
     if (thread->sys) {
@@ -1010,7 +1048,6 @@ int threadptrace_getReturnCode(Thread* base) {
 
 void threadptrace_free(Thread* base) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
-
     if (thread->sys) {
         syscallhandler_unref(thread->sys);
     }
