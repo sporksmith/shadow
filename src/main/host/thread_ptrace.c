@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <glib.h>
 #include <inttypes.h>
+#include <semaphore.h>
 #include <sys/prctl.h>
 #include <sys/ptrace.h>
 #include <sys/syscall.h>
@@ -238,6 +239,7 @@ static void _threadptrace_memcpyToPlugin(ThreadPtrace* thread,
 const void* threadptrace_getReadablePtr(Thread* base, PluginPtr plugin_src,
                                         size_t n);
 static void _threadptrace_ensureStopped(ThreadPtrace* thread);
+static void _threadptrace_doAttach(ThreadPtrace* thread);
 
 static ThreadPtrace* _threadToThreadPtrace(Thread* thread) {
     utility_assert(thread->type_id == THREADPTRACE_TYPE_ID);
@@ -297,70 +299,162 @@ static const char* _syscall_regs_to_str(const struct user_regs_struct* regs) {
     return buf;
 }
 
-static pid_t _threadptrace_fork_exec(const char* file, char* const argv[],
-                                     char* const envp[]) {
+typedef struct {
+    pthread_t pthread;
+    // Worker posts to initiate a fork request.
+    sem_t sem_begin;
+    // Proxy posts to signal request completion.
+    sem_t sem_done;
+
+    pid_t self;
+
+    // Request arguments.
+    const char* file;
+    char* const * argv;
+    char* const * envp;
+
+    // Request result.
+    pid_t child_pid;
+
+} ForkProxy;
+
+void* forkproxy_fn(void *void_forkproxy) {
+    ForkProxy* forkproxy = void_forkproxy;
     pid_t shadow_pid = getpid();
 
+    while (1) {
+        // Wait for a request.
+        sem_wait(&forkproxy->sem_begin);
+
+        // fork requested process.
 #ifdef SHADOW_COVERAGE
-    // The instrumentation in coverage mode causes corruption in between vfork
-    // and exec. Use fork instead.
-    pid_t pid = fork();
+        // The instrumentation in coverage mode causes corruption in between vfork
+        // and exec. Use fork instead.
+        pid_t pid = fork();
 #else
-    pid_t pid = vfork();
+        pid_t pid = vfork();
 #endif
 
-    switch (pid) {
-        case -1: {
-            error("fork: %s", g_strerror(errno));
-            return -1;
-        }
-        case 0: {
-            // child
+        switch (pid) {
+            case -1: {
+                         abort(); // FIXME
+                error("fork: %s", g_strerror(errno));
+                exit(1);
+            }
+            case 0: {
+                // child
 
-            // CAUTION: Because we used `vfork`, we still share memory of the
-            // parent process (which will be suspended until we call `exec`).
-            // i.e. be wary of any potential side-effects to global variables
-            // etc.
- 
-            // Ensure that the child process exits when Shadow does.  Shadow
-            // ought to have already tried to terminate the child via SIGTERM
-            // before shutting down (though see
-            // https://github.com/shadow/shadow/issues/903), so now we jump all
-            // the way to SIGKILL.
-            if (prctl(PR_SET_PDEATHSIG, SIGKILL) < 0) {
-                error("prctl: %s", g_strerror(errno));
-                exit(1);
-            }
-            // Validate that Shadow is still alive (didn't die in between forking and calling
-            // prctl).
-            if (getppid() != shadow_pid) {
-                error("parent (shadow) exited");
-                exit(1);
-            }
-            // Disable RDTSC
-            if (prctl(PR_SET_TSC, PR_TSC_SIGSEGV, 0, 0, 0) < 0) {
-                error("prctl: %s", g_strerror(errno));
-                return -1;
-            }
-            // Become a tracee of the parent process.
-            if (ptrace(PTRACE_TRACEME, 0, 0, 0) < 0) {
-                error("ptrace: %s", g_strerror(errno));
-                return -1;
-            }
-            // Because we're now being ptraced, execvpe will put this process
-            // in a ptrace-stop.  Luckily, exec will re-awakens the parent
-            // before stopping this one.
-            if (execvpe(file, argv, envp) < 0) {
-                error("execvpe: %s", g_strerror(errno));
-                return -1;
+                // CAUTION: Because we used `vfork`, we still share memory of the
+                // parent process (which will be suspended until we call `exec`).
+                // i.e. be wary of any potential side-effects to global variables
+                // etc.
+
+                // Ensure that the child process exits when Shadow does.  Shadow
+                // ought to have already tried to terminate the child via SIGTERM
+                // before shutting down (though see
+                // https://github.com/shadow/shadow/issues/903), so now we jump all
+                // the way to SIGKILL.
+                if (prctl(PR_SET_PDEATHSIG, SIGKILL) < 0) {
+                         abort(); // FIXME
+                    error("prctl: %s", g_strerror(errno));
+                    exit(1);
+                }
+                // Validate that Shadow is still alive (didn't die in between forking and calling
+                // prctl).
+                if (getppid() != shadow_pid) {
+                         abort(); // FIXME
+                    error("parent (shadow) exited");
+                    exit(1);
+                }
+                // Disable RDTSC
+                if (prctl(PR_SET_TSC, PR_TSC_SIGSEGV, 0, 0, 0) < 0) {
+                         abort(); // FIXME
+                    error("prctl: %s", g_strerror(errno));
+                    exit(1);
+                }
+                // Become a tracee of the parent process.
+                if (ptrace(PTRACE_TRACEME, 0, 0, 0) < 0) {
+                         abort(); // FIXME
+                    error("ptrace: %s", g_strerror(errno));
+                    exit(1);
+                }
+                // Because we're now being ptraced, execvpe will put this process
+                // in a ptrace-stop.  Luckily, exec will re-awakens the parent
+                // before stopping this one.
+                if (execvpe(forkproxy->file, forkproxy->argv, forkproxy->envp) < 0) {
+                         abort(); // FIXME
+                    error("execvpe: %s", g_strerror(errno));
+                    exit(1);
+                }
             }
         }
-        default: {
-            // parent
-            info("started process %s with PID %d", file, pid);
-            return pid;
+        // Parent
+        forkproxy->child_pid = pid;
+        // FIXME info("started process %s with PID %d", forkproxy->file, forkproxy->child_pid);
+
+#ifdef SHADOW_COVERAGE
+        // Because we used fork, we have to synchronize.
+        sched_yield();
+        // Wait for ptrace event from child's execve
+        rv = waitpid(pid, wstatus, 0);
+#endif
+
+        int wstatus;
+        int rv = waitpid(pid, &wstatus, 0);
+        if (rv < 0) {
+            abort();
         }
+
+        // In vfork parent doesn't run again until the child calls exec, so we
+        // know that we're already attached. Detach and leave it stopped. XXX:
+        // we might need to get it into a ptrace signal-stop before we can
+        // deliver a SIGSTOP this way.
+        if (ptrace(PTRACE_DETACH, forkproxy->child_pid, 0, SIGSTOP) < 0) {
+            int e = errno; // FIXME DEBUG
+            const char* err = g_strerror(e); // FIXME DEBUG
+            abort(); //FIXME
+            error("ptrace: %s", g_strerror(errno));
+            exit(1);
+        }
+
+        // Signal completion.
+        sem_post(&forkproxy->sem_done);
     }
+}
+
+ForkProxy* forkproxy_new() {
+    ForkProxy* forkproxy = malloc(sizeof(*forkproxy));
+    *forkproxy = (ForkProxy) {0};
+    if (sem_init(&forkproxy->sem_begin, 0, 0) != 0) {
+        error("sem_init: %s", g_strerror(errno));
+        exit(1);
+    }
+    if (sem_init(&forkproxy->sem_done, 0, 0) != 0) {
+        error("sem_init: %s", g_strerror(errno));
+        exit(1);
+    }
+    int rv;
+    if ((rv = pthread_create(&forkproxy->pthread, NULL, forkproxy_fn, forkproxy)) != 0) {
+        error("pthread_create: %s", g_strerror(rv));
+        exit(1);
+    }
+    return forkproxy;
+}
+
+static pid_t _threadptrace_fork_exec(const char* file, char* const argv[],
+                                     char* const envp[]) {
+    // Each worker thread gets its own proxy thread so that forking simulated
+    // processes can be parallelized.
+    static __thread ForkProxy* forkproxy = NULL;
+    if (forkproxy == NULL) {
+        forkproxy = forkproxy_new();
+    }
+    forkproxy->file = file;
+    forkproxy->argv = argv;
+    forkproxy->envp = envp;
+    sem_post(&forkproxy->sem_begin);
+    sem_wait(&forkproxy->sem_done);
+    return forkproxy->child_pid;
 }
 
 static void _threadptrace_getChildMemoryHandle(ThreadPtrace* thread) {
@@ -668,6 +762,10 @@ pid_t threadptrace_run(Thread* base, gchar** argv, gchar** envv) {
 
     thread->base.nativeTid = _threadptrace_fork_exec(argv[0], argv, myenvv);
     thread->base.nativePid = thread->base.nativeTid;
+    thread->needAttachment = true;
+    thread->childMemFile = NULL;
+    _threadptrace_getChildMemoryHandle(thread);
+    //_threadptrace_doAttach(thread);
 
     if (thread->enableIpc) {
         // Send 'start' event.
@@ -680,7 +778,14 @@ pid_t threadptrace_run(Thread* base, gchar** argv, gchar** envv) {
         shimevent_sendEventToPlugin(_threadptrace_ipcData(thread), &startEvent);
     }
 
+    // Allow child to start executing.
+    /*
+    if (ptrace(PTRACE_SYSEMU, thread->base.nativeTid, 0, thread->signalToDeliver) < 0) {
+        error("ptrace %d: %s", thread->base.nativeTid, g_strerror(errno));
+        abort();
+    }
     _threadptrace_nextChildState(thread);
+    */
 
     return thread->base.nativePid;
 }
@@ -753,8 +858,11 @@ static void threadptrace_flushPtrs(Thread* base) {
 }
 
 static void _threadptrace_doAttach(ThreadPtrace* thread) {
+    /* FIXME
     utility_assert(thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL ||
                    thread->childState == THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL);
+                   */
+
 
     debug("thread %i attaching to child %i", thread->base.tid, (int)thread->base.nativeTid);
     if (ptrace(PTRACE_ATTACH, thread->base.nativeTid, 0, 0) < 0) {
@@ -801,6 +909,22 @@ static void _threadptrace_doDetach(ThreadPtrace* thread) {
     _threadptrace_ensureStopped(thread);
 
     // Detach, delivering a sigstop.
+    //
+    // XXX: Technically the specified signal (here SIGSTOP) isn't guaranteed to
+    // be delivered if we're not specifically in a *signal* ptrace stop. It
+    // seems to be delivered in practice, though. Meaningwhile doing it the
+    // "right" way would be fiddly and slow. From ptrace(2):
+    //
+    // If the tracee is running when the tracer wants to detach it, the usual
+    // solution is to send SIGSTOP (using tgkill(2), to make sure it goes  to
+    // the  correct  thread), wait for the tracee to stop in
+    // signal-delivery-stop for SIGSTOP and then detach it (suppressing SIGSTOP
+    // injection).  A design bug is that this can race with  concur‐ rent
+    // SIGSTOPs.   Another  complication is that the tracee may enter other
+    // ptrace- stops and needs to be restarted and waited for again, until
+    // SIGSTOP is seen.   Yet another  complication is to be sure that the
+    // tracee is not already ptrace-stopped, because no signal delivery happens
+    // while it is—not even SIGSTOP.
     if (ptrace(PTRACE_DETACH, thread->base.nativeTid, 0, SIGSTOP) < 0) {
         error("ptrace: %s", g_strerror(errno));
         abort();
@@ -932,6 +1056,7 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                 debug("THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL");
                 SysCallCondition* condition = _threadptrace_resumeIpcSyscall(thread, &changedState);
                 if (condition) {
+                    _threadptrace_doDetach(thread);
                     return condition;
                 }
                 break;
@@ -940,6 +1065,7 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                 debug("THREAD_PTRACE_CHILD_STATE_SYSCALL");
                 SysCallCondition* condition = _threadptrace_resumeSyscall(thread, &changedState);
                 if (condition) {
+                    _threadptrace_doDetach(thread);
                     return condition;
                 }
                 break;
