@@ -1051,6 +1051,21 @@ void threadptrace_terminate(Thread* base) {
               thread->base.nativePid, wstatus);
     }
 
+    // TODO: When using ForkProxy, the thread that originally spawned the
+    // plugin process *also* needs to wait on the child process to clean it up.
+    // Otherwise we're left with a zombie. While most of the child's resources
+    // are reclaimed, its pid is not. Thus, in a simulation that continuously
+    // spawns and terminates processes, we could eventually run out of pid's.
+    //
+    // When Shadow exits, the zombie processes will be inherited by init, which
+    // will clean it up.
+    //
+    // We could add a method to ForkProxy to wait on our behalf, but *this*
+    // worker thread's ForkProxy isn't necessarily the one that spawned it.  We
+    // could keep make this new method thread-safe, and keep a pointer from the
+    // PtraceThread to the ForkProxy that spawned its plugin process, but this
+    // makes ForkProxy significantly more complicated. Deferring for now.
+
     _threadptrace_updateChildState(thread, reason);
 }
 
