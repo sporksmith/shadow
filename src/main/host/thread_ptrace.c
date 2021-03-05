@@ -16,6 +16,7 @@
 // Must come after sys/ptrace.h
 #include <linux/ptrace.h>
 
+#include "main/core/logger/shadow_logger.h"
 #include "main/core/support/object_counter.h"
 #include "main/core/worker.h"
 #include "main/host/shimipc.h"
@@ -321,6 +322,7 @@ typedef struct {
 void* forkproxy_fn(void *void_forkproxy) {
     ForkProxy* forkproxy = void_forkproxy;
     pid_t shadow_pid = getpid();
+    shadow_logger_register(shadow_logger_getDefault(), pthread_self());
 
     while (1) {
         // Wait for a request.
@@ -337,7 +339,6 @@ void* forkproxy_fn(void *void_forkproxy) {
 
         switch (pid) {
             case -1: {
-                         abort(); // FIXME
                 error("fork: %s", g_strerror(errno));
                 exit(1);
             }
@@ -355,26 +356,22 @@ void* forkproxy_fn(void *void_forkproxy) {
                 // https://github.com/shadow/shadow/issues/903), so now we jump all
                 // the way to SIGKILL.
                 if (prctl(PR_SET_PDEATHSIG, SIGKILL) < 0) {
-                         abort(); // FIXME
                     error("prctl: %s", g_strerror(errno));
                     exit(1);
                 }
                 // Validate that Shadow is still alive (didn't die in between forking and calling
                 // prctl).
                 if (getppid() != shadow_pid) {
-                         abort(); // FIXME
                     error("parent (shadow) exited");
                     exit(1);
                 }
                 // Disable RDTSC
                 if (prctl(PR_SET_TSC, PR_TSC_SIGSEGV, 0, 0, 0) < 0) {
-                         abort(); // FIXME
                     error("prctl: %s", g_strerror(errno));
                     exit(1);
                 }
                 // Become a tracee of the parent process.
                 if (ptrace(PTRACE_TRACEME, 0, 0, 0) < 0) {
-                         abort(); // FIXME
                     error("ptrace: %s", g_strerror(errno));
                     exit(1);
                 }
@@ -382,7 +379,6 @@ void* forkproxy_fn(void *void_forkproxy) {
                 // in a ptrace-stop.  Luckily, exec will re-awakens the parent
                 // before stopping this one.
                 if (execvpe(forkproxy->file, forkproxy->argv, forkproxy->envp) < 0) {
-                         abort(); // FIXME
                     error("execvpe: %s", g_strerror(errno));
                     exit(1);
                 }
@@ -390,7 +386,7 @@ void* forkproxy_fn(void *void_forkproxy) {
         }
         // Parent
         forkproxy->child_pid = pid;
-        // FIXME info("started process %s with PID %d", forkproxy->file, forkproxy->child_pid);
+        info("started process %s with PID %d", forkproxy->file, forkproxy->child_pid);
 
 #ifdef SHADOW_COVERAGE
         // Because we used fork, we have to synchronize.
