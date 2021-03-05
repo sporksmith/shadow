@@ -670,15 +670,6 @@ pid_t threadptrace_run(Thread* base, gchar** argv, gchar** envv) {
         shimevent_sendEventToPlugin(_threadptrace_ipcData(thread), &startEvent);
     }
 
-    // Allow child to start executing.
-    /*
-    if (ptrace(PTRACE_SYSEMU, thread->base.nativeTid, 0, thread->signalToDeliver) < 0) {
-        error("ptrace %d: %s", thread->base.nativeTid, g_strerror(errno));
-        abort();
-    }
-    _threadptrace_nextChildState(thread);
-    */
-
     return thread->base.nativePid;
 }
 
@@ -750,12 +741,6 @@ static void threadptrace_flushPtrs(Thread* base) {
 }
 
 static void _threadptrace_doAttach(ThreadPtrace* thread) {
-    /* FIXME
-    utility_assert(thread->childState == THREAD_PTRACE_CHILD_STATE_SYSCALL ||
-                   thread->childState == THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL);
-                   */
-
-
     debug("thread %i attaching to child %i", thread->base.tid, (int)thread->base.nativeTid);
     if (ptrace(PTRACE_ATTACH, thread->base.nativeTid, 0, 0) < 0) {
         error("ptrace: %s", g_strerror(errno));
@@ -948,6 +933,8 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                 debug("THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL");
                 SysCallCondition* condition = _threadptrace_resumeIpcSyscall(thread, &changedState);
                 if (condition) {
+                    // Detach to avoid O(n) behavior in waitpid. See
+                    // <https://github.com/shadow/shadow/issues/1134>.
                     _threadptrace_doDetach(thread);
                     return condition;
                 }
@@ -957,6 +944,8 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                 debug("THREAD_PTRACE_CHILD_STATE_SYSCALL");
                 SysCallCondition* condition = _threadptrace_resumeSyscall(thread, &changedState);
                 if (condition) {
+                    // Detach to avoid O(n) behavior in waitpid. See
+                    // <https://github.com/shadow/shadow/issues/1134>.
                     _threadptrace_doDetach(thread);
                     return condition;
                 }
