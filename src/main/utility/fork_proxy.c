@@ -25,8 +25,8 @@ struct _ForkProxy {
 
     // Request arguments.
     const char* file;
-    char* const * argv;
-    char* const * envp;
+    char* const* argv;
+    char* const* envp;
 
     // Request result.
     pid_t child_pid;
@@ -111,7 +111,8 @@ ForkProxy* forkproxy_new(void (*parent_cb)(pid_t), void (*child_cb)(void)) {
     return forkproxy;
 }
 
-pid_t forkproxy_forkExec(ForkProxy* forkproxy, const char* file, char* const argv[], char* const envp[]) {
+pid_t forkproxy_forkExec(ForkProxy* forkproxy, const char* file, char* const argv[],
+                         char* const envp[]) {
     forkproxy->file = file;
     forkproxy->argv = argv;
     forkproxy->envp = envp;
@@ -123,4 +124,3 @@ pid_t forkproxy_forkExec(ForkProxy* forkproxy, const char* file, char* const arg
     }
     return forkproxy->child_pid;
 }
-
