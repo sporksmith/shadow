@@ -307,8 +307,6 @@ typedef struct {
     // Proxy posts to signal request completion.
     sem_t sem_done;
 
-    pid_t self;
-
     // Request arguments.
     const char* file;
     char* const * argv;
@@ -357,30 +355,25 @@ void* forkproxy_fn(void *void_forkproxy) {
                 // the way to SIGKILL.
                 if (prctl(PR_SET_PDEATHSIG, SIGKILL) < 0) {
                     error("prctl: %s", g_strerror(errno));
-                    exit(1);
                 }
                 // Validate that Shadow is still alive (didn't die in between forking and calling
                 // prctl).
                 if (getppid() != shadow_pid) {
                     error("parent (shadow) exited");
-                    exit(1);
                 }
                 // Disable RDTSC
                 if (prctl(PR_SET_TSC, PR_TSC_SIGSEGV, 0, 0, 0) < 0) {
                     error("prctl: %s", g_strerror(errno));
-                    exit(1);
                 }
                 // Become a tracee of the parent process.
                 if (ptrace(PTRACE_TRACEME, 0, 0, 0) < 0) {
                     error("ptrace: %s", g_strerror(errno));
-                    exit(1);
                 }
                 // Because we're now being ptraced, execvpe will put this process
                 // in a ptrace-stop.  Luckily, exec will re-awakens the parent
                 // before stopping this one.
                 if (execvpe(forkproxy->file, forkproxy->argv, forkproxy->envp) < 0) {
                     error("execvpe: %s", g_strerror(errno));
-                    exit(1);
                 }
             }
         }
@@ -388,32 +381,30 @@ void* forkproxy_fn(void *void_forkproxy) {
         forkproxy->child_pid = pid;
         info("started process %s with PID %d", forkproxy->file, forkproxy->child_pid);
 
-#ifdef SHADOW_COVERAGE
-        // Because we used fork, we have to synchronize.
-        sched_yield();
-        // Wait for ptrace event from child's execve
-        rv = waitpid(pid, wstatus, 0);
-#endif
-
+        // Because we used vfork (in non-coverage mode), the parent is
+        // guaranteed not to execute again until the child has called
+        // `execvpe`, which means we're already tracing it. It'd be nice if we
+        // could just immediately detach here, but it appears to be an error to
+        // do so without waiting on the pending ptrace-stop first.
         int wstatus;
-        int rv = waitpid(pid, &wstatus, 0);
-        if (rv < 0) {
-            abort();
+        if (waitpid(pid, &wstatus, 0) < 0) {
+            error("waitpid: %s", g_strerror(errno));
+        }
+        StopReason reason = _getStopReason(wstatus);
+        if (reason.type != STOPREASON_SIGNAL) {
+            error("Unexpected stop reason: %d", reason.type);
+        }
+        if (reason.signal.signal != SIGTRAP) {
+            error("Unexpected signal: %d", reason.signal.signal);
         }
 
-        // In vfork parent doesn't run again until the child calls exec, so we
-        // know that we're already attached. Detach and leave it stopped. XXX:
-        // we might need to get it into a ptrace signal-stop before we can
-        // deliver a SIGSTOP this way.
+        // Stop and detach the child, allowing the shadow worker thread to
+        // attach it when it's run.
         if (ptrace(PTRACE_DETACH, forkproxy->child_pid, 0, SIGSTOP) < 0) {
-            int e = errno; // FIXME DEBUG
-            const char* err = g_strerror(e); // FIXME DEBUG
-            abort(); //FIXME
             error("ptrace: %s", g_strerror(errno));
-            exit(1);
         }
 
-        // Signal completion.
+        // Signal calling thread that we're done.
         sem_post(&forkproxy->sem_done);
     }
 }
@@ -423,16 +414,13 @@ ForkProxy* forkproxy_new() {
     *forkproxy = (ForkProxy) {0};
     if (sem_init(&forkproxy->sem_begin, 0, 0) != 0) {
         error("sem_init: %s", g_strerror(errno));
-        exit(1);
     }
     if (sem_init(&forkproxy->sem_done, 0, 0) != 0) {
         error("sem_init: %s", g_strerror(errno));
-        exit(1);
     }
     int rv;
     if ((rv = pthread_create(&forkproxy->pthread, NULL, forkproxy_fn, forkproxy)) != 0) {
         error("pthread_create: %s", g_strerror(rv));
-        exit(1);
     }
     return forkproxy;
 }
