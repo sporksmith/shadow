@@ -2,8 +2,9 @@
 
 #include <errno.h>
 #include <semaphore.h>
-#include <unistd.h>
+#include <stdlib.h>
 #include <sys/prctl.h>
+#include <unistd.h>
 
 #include "main/core/logger/shadow_logger.h"
 #include "support/logger/logger.h"
