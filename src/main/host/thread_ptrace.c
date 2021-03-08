@@ -1027,6 +1027,9 @@ void threadptrace_terminate(Thread* base) {
         warning("kill %d: %s", thread->base.nativePid, g_strerror(errno));
     }
 
+    // Wait for the exit ptrace-stop. Because the shadow process is the natural
+    // parent of the child (even if spawned from a task/thread other than this
+    // one), this also reaps the child.
     int wstatus;
     if (_waitpid_spin(thread->base.nativePid, &wstatus, 0) < 0) {
         error("waitpid: %s", g_strerror(errno));
@@ -1039,21 +1042,6 @@ void threadptrace_terminate(Thread* base) {
         error("Expected process %d to exit after SIGKILL, instead received status %d",
               thread->base.nativePid, wstatus);
     }
-
-    // TODO: When using ForkProxy, the thread that originally spawned the
-    // plugin process *also* needs to wait on the child process to clean it up.
-    // Otherwise we're left with a zombie. While most of the child's resources
-    // are reclaimed, its pid is not. Thus, in a simulation that continuously
-    // spawns and terminates processes, we could eventually run out of pid's.
-    //
-    // When Shadow exits, the zombie processes will be inherited by init, which
-    // will clean it up.
-    //
-    // We could add a method to ForkProxy to wait on our behalf, but *this*
-    // worker thread's ForkProxy isn't necessarily the one that spawned it.  We
-    // could keep make this new method thread-safe, and keep a pointer from the
-    // PtraceThread to the ForkProxy that spawned its plugin process, but this
-    // makes ForkProxy significantly more complicated. Deferring for now.
 
     _threadptrace_updateChildState(thread, reason);
 }
