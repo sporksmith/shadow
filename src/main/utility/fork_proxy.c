@@ -37,7 +37,6 @@ void* forkproxy_fn(void* void_forkproxy) {
     ForkProxy* forkproxy = void_forkproxy;
     pid_t shadow_pid = getpid();
     shadow_logger_register(shadow_logger_getDefault(), pthread_self());
-    // TODO: ignore SIGCHLD so we don't have to reap children.
 
     while (1) {
         // Wait for a request.
