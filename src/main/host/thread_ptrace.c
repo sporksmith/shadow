@@ -36,6 +36,22 @@
 // We instead add the CLONE_PTRACE flag to the clone syscall itself.
 #define THREADPTRACE_PTRACE_OPTIONS (PTRACE_O_EXITKILL | PTRACE_O_TRACESYSGOOD | PTRACE_O_TRACEEXEC)
 
+// `waitpid` is O(n) in the # of child threads and tracees
+// <https://github.com/shadow/shadow/issues/1134>. We work around it by
+// spawning processes on a ForkProxy thread, keeping them off the worker
+// thread's child list, and by detaching inactive plugins to keep them off the
+// worker thread's tracee list.
+//
+// Each worker thread gets its own proxy thread so that forking simulated
+// processes can be parallelized.
+static bool _useONWaitpidWorkarounds = true;
+OPTION_EXPERIMENTAL_ENTRY(
+    "no-ptrace-o-n-waitpid-workarounds", 0, G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE,
+    &_useONWaitpidWorkarounds,
+    "Disable performance workarounds for waitpid being O(n). Beneficial to disable if waitpid is "
+    "patched to be O(1) or for < ~500 simulated processes",
+    NULL)
+
 static char SYSCALL_INSTRUCTION[] = {0x0f, 0x05};
 
 // Number of times to do a non-blocking wait while waiting for traced thread.
@@ -674,20 +690,21 @@ pid_t threadptrace_run(Thread* base, gchar** argv, gchar** envv) {
     g_free(envStr);
     g_free(argStr);
 
-    // `waitpid` is O(n) in the # of child threads and tracees
-    // <https://github.com/shadow/shadow/issues/1134>. ForkProxy spawns processes
-    // on a separate thread so that the shadow worker thread is not the parent,
-    // keeping the waitpid calls in the Shadow workers O(1) (assuming it also
-    // ptrace-detaches inactive processes).
-    //
-    // Each worker thread gets its own proxy thread so that forking simulated
-    // processes can be parallelized.
-    static __thread ForkProxy* forkproxy = NULL;
-    if (forkproxy == NULL) {
-        forkproxy = forkproxy_new(_threadptrace_fork_exec);
+    if (_useONWaitpidWorkarounds) {
+        // Each worker thread gets its own proxy thread so that forking simulated
+        // processes can be parallelized.
+        static __thread ForkProxy* forkproxy = NULL;
+        if (forkproxy == NULL) {
+            forkproxy = forkproxy_new(_threadptrace_fork_exec);
+        }
+
+        // Fork plugin from a proxy thread to keep it off of worker thread's
+        // children list.
+        thread->base.nativeTid = forkproxy_forkExec(forkproxy, argv[0], argv, myenvv);
+    } else {
+        thread->base.nativeTid = _threadptrace_fork_exec(argv[0], argv, myenvv);
     }
 
-    thread->base.nativeTid = forkproxy_forkExec(forkproxy, argv[0], argv, myenvv);
     thread->base.nativePid = thread->base.nativeTid;
     thread->needAttachment = true;
     thread->childMemFile = NULL;
@@ -967,9 +984,11 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                 debug("THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL");
                 SysCallCondition* condition = _threadptrace_resumeIpcSyscall(thread, &changedState);
                 if (condition) {
-                    // Detach to avoid O(n) behavior in waitpid. See
-                    // <https://github.com/shadow/shadow/issues/1134>.
-                    _threadptrace_doDetach(thread);
+                    if (_useONWaitpidWorkarounds) {
+                        // Keep inactive plugins off worker thread's tracee
+                        // list.
+                        _threadptrace_doDetach(thread);
+                    }
                     return condition;
                 }
                 break;
@@ -978,9 +997,11 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                 debug("THREAD_PTRACE_CHILD_STATE_SYSCALL");
                 SysCallCondition* condition = _threadptrace_resumeSyscall(thread, &changedState);
                 if (condition) {
-                    // Detach to avoid O(n) behavior in waitpid. See
-                    // <https://github.com/shadow/shadow/issues/1134>.
-                    _threadptrace_doDetach(thread);
+                    if (_useONWaitpidWorkarounds) {
+                        // Keep inactive plugins off worker thread's tracee
+                        // list.
+                        _threadptrace_doDetach(thread);
+                    }
                     return condition;
                 }
                 break;
