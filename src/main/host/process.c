@@ -540,8 +540,8 @@ void process_schedule(Process* proc, gpointer nothing) {
 void process_detachPlugin(gpointer procptr, gpointer nothing) {
     Process* proc = procptr;
     MAGIC_ASSERT(proc);
-    if (proc->interposeMethod == INTERPOSE_HYBRID ||
-        proc->interposeMethod == INTERPOSE_PTRACE) {
+    if (threadptrace_needsToDetachBeforeMigrating() &&
+        (proc->interposeMethod == INTERPOSE_HYBRID || proc->interposeMethod == INTERPOSE_PTRACE)) {
         GHashTableIter iter;
         g_hash_table_iter_init(&iter, proc->threads);
         gpointer key, value;

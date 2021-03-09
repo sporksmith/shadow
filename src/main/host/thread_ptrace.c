@@ -52,6 +52,13 @@ OPTION_EXPERIMENTAL_ENTRY(
     "patched to be O(1) or for < ~500 simulated processes",
     NULL)
 
+static bool _kernelHasMultithreadPtrace = false;
+OPTION_EXPERIMENTAL_ENTRY("kernel-has-multithread-ptrace", 0, 0, G_OPTION_ARG_NONE,
+                          &_kernelHasMultithreadPtrace,
+                          "Use to improve performance on a kernel that allows ptrace to be called "
+                          "from other threads in the tracer's thread group.",
+                          NULL)
+
 static char SYSCALL_INSTRUCTION[] = {0x0f, 0x05};
 
 // Number of times to do a non-blocking wait while waiting for traced thread.
@@ -315,6 +322,10 @@ static const char* _syscall_regs_to_str(const struct user_regs_struct* regs) {
     return buf;
 }
 
+static bool _detachAfterForkEnabled() {
+    return _useONWaitpidWorkarounds && !_kernelHasMultithreadPtrace;
+}
+
 static pid_t _threadptrace_fork_exec(const char* file, char* const argv[], char* const envp[]) {
     pid_t shadow_pid = getpid();
 
@@ -379,10 +390,12 @@ static pid_t _threadptrace_fork_exec(const char* file, char* const argv[], char*
         error("Unexpected signal: %d", reason.signal.signal);
     }
 
-    // Stop and detach the child, allowing the shadow worker thread to
-    // attach it when it's run.
-    if (ptrace(PTRACE_DETACH, pid, 0, SIGSTOP) < 0) {
-        error("ptrace: %s", g_strerror(errno));
+    if (_detachAfterForkEnabled()) {
+        // Stop and detach the child, allowing the shadow worker thread to
+        // attach it when it's run.
+        if (ptrace(PTRACE_DETACH, pid, 0, SIGSTOP) < 0) {
+            error("ptrace: %s", g_strerror(errno));
+        }
     }
     return pid;
 }
@@ -706,7 +719,7 @@ pid_t threadptrace_run(Thread* base, gchar** argv, gchar** envv) {
     }
 
     thread->base.nativePid = thread->base.nativeTid;
-    thread->needAttachment = true;
+    thread->needAttachment = _detachAfterForkEnabled();
     thread->childMemFile = NULL;
     _threadptrace_getChildMemoryHandle(thread);
 
@@ -860,6 +873,10 @@ static void _threadptrace_doDetach(ThreadPtrace* thread) {
 
     debug("detached");
     thread->needAttachment = true;
+}
+
+bool threadptrace_needsToDetachBeforeMigrating() {
+    return !_kernelHasMultithreadPtrace;
 }
 
 void threadptrace_detach(Thread* base) {
