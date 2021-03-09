@@ -32,6 +32,14 @@ struct _ForkProxy {
     pid_t child_pid;
 };
 
+static void _sem_wait_ignoring_interrupts(sem_t *sem) {
+    int rv;
+    do {
+        rv = sem_wait(sem);
+    } while (rv == -1 && errno == EINTR);
+    return rv;
+}
+
 // Function executed by a ForkProxy thread.
 void* forkproxy_fn(void* void_forkproxy) {
     ForkProxy* forkproxy = void_forkproxy;
@@ -40,7 +48,7 @@ void* forkproxy_fn(void* void_forkproxy) {
 
     while (1) {
         // Wait for a request.
-        if (sem_wait(&forkproxy->sem_begin) != 0) {
+        if (_sem_wait_ignoring_interrupts(&forkproxy->sem_begin) != 0) {
             error("sem_wait: %s", g_strerror(errno));
         }
 
@@ -118,7 +126,7 @@ pid_t forkproxy_forkExec(ForkProxy* forkproxy, const char* file, char* const arg
     if (sem_post(&forkproxy->sem_begin) != 0) {
         error("sem_post: %s", g_strerror(errno));
     }
-    if (sem_wait(&forkproxy->sem_done) != 0) {
+    if (_sem_wait_ignoring_interrupts(&forkproxy->sem_done) != 0) {
         error("sem_wait: %s", g_strerror(errno));
     }
     return forkproxy->child_pid;
