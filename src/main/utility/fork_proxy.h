@@ -3,20 +3,16 @@
 
 #include <sys/types.h>
 
-// An object for forking processes on a separate thread.  `parent_cb` will be
-// executed in the parent after each fork, and `child_cb` will be executed in
-// the child before calling `exec`.
+// An object for forking processes on a separate thread.
 //
 // ForkProxy itself is *not* thread safe.
 typedef struct _ForkProxy ForkProxy;
 
-// Creates a new ForkProxy.  `parent_cb` will be executed in the parent after
-// each fork, and `child_cb` will be executed in the child before calling
-// `exec`.
-ForkProxy* forkproxy_new(void (*parent_cb)(pid_t), void (*child_cb)(void));
+// Creates a new ForkProxy.
+ForkProxy* forkproxy_new(pid_t (*do_fork_exec)(const char* file, char* const argv[],
+                                               char* const envp[]));
 
-// Fork and exec the specified program. Uses `fork` when SHADOW_COVERAGE is
-// defined, and `vfork` otherwise.
+// Calls the provided `do_fork_exec` on ForkProxy's thread.
 pid_t forkproxy_forkExec(ForkProxy* forkproxy, const char* file, char* const argv[],
                          char* const envp[]);
 

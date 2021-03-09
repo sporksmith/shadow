@@ -10,10 +10,7 @@
 #include "support/logger/logger.h"
 
 struct _ForkProxy {
-    // To be called in parent after fork.
-    void (*parent_cb)(pid_t);
-    // To be called in child between fork and exec.
-    void (*child_cb)(void);
+    pid_t (*do_fork_exec)(const char* file, char* const argv[], char* const envp[]);
 
     // Thread that will fork the requested processes.
     pthread_t pthread;
@@ -32,7 +29,7 @@ struct _ForkProxy {
     pid_t child_pid;
 };
 
-static void _sem_wait_ignoring_interrupts(sem_t *sem) {
+static int _sem_wait_ignoring_interrupts(sem_t *sem) {
     int rv;
     do {
         rv = sem_wait(sem);
@@ -43,7 +40,6 @@ static void _sem_wait_ignoring_interrupts(sem_t *sem) {
 // Function executed by a ForkProxy thread.
 void* forkproxy_fn(void* void_forkproxy) {
     ForkProxy* forkproxy = void_forkproxy;
-    pid_t shadow_pid = getpid();
     shadow_logger_register(shadow_logger_getDefault(), pthread_self());
 
     while (1) {
@@ -52,58 +48,19 @@ void* forkproxy_fn(void* void_forkproxy) {
             error("sem_wait: %s", g_strerror(errno));
         }
 
-        // fork requested process.
-#ifdef SHADOW_COVERAGE
-        // The instrumentation in coverage mode causes corruption in between vfork
-        // and exec. Use fork instead.
-        pid_t pid = fork();
-#else
-        pid_t pid = vfork();
-#endif
+        forkproxy->child_pid =
+            forkproxy->do_fork_exec(forkproxy->file, forkproxy->argv, forkproxy->envp);
 
-        switch (pid) {
-            case -1: {
-                error("fork: %s", g_strerror(errno));
-                break;
-            }
-            case 0: {
-                // Ensure that the child process exits when Shadow does.  Shadow
-                // ought to have already tried to terminate the child via SIGTERM
-                // before shutting down (though see
-                // https://github.com/shadow/shadow/issues/903), so now we jump all
-                // the way to SIGKILL.
-                if (prctl(PR_SET_PDEATHSIG, SIGKILL) < 0) {
-                    error("prctl: %s", g_strerror(errno));
-                }
-                // Validate that Shadow is still alive (didn't die in between forking and calling
-                // prctl).
-                if (getppid() != shadow_pid) {
-                    error("parent (shadow) exited");
-                }
-                forkproxy->child_cb();
-                if (execvpe(forkproxy->file, forkproxy->argv, forkproxy->envp) < 0) {
-                    error("execvpe: %s", g_strerror(errno));
-                }
-                break;
-            }
-            default: {
-                // Parent
-                forkproxy->child_pid = pid;
-                info("started process %s with PID %d", forkproxy->file, forkproxy->child_pid);
-                forkproxy->parent_cb(pid);
-                // Signal calling thread that we're done.
-                sem_post(&forkproxy->sem_done);
-                break;
-            }
-        }
+        // Signal calling thread that we're done.
+        sem_post(&forkproxy->sem_done);
     }
 }
 
-ForkProxy* forkproxy_new(void (*parent_cb)(pid_t), void (*child_cb)(void)) {
+ForkProxy* forkproxy_new(pid_t (*do_fork_exec)(const char* file, char* const argv[],
+                                               char* const envp[])) {
     ForkProxy* forkproxy = malloc(sizeof(*forkproxy));
     *forkproxy = (ForkProxy){
-        .parent_cb = parent_cb,
-        .child_cb = child_cb,
+        .do_fork_exec = do_fork_exec,
     };
     if (sem_init(&forkproxy->sem_begin, 0, 0) != 0) {
         error("sem_init: %s", g_strerror(errno));
