@@ -20,9 +20,4 @@ ForkProxy* forkproxy_new(void (*parent_cb)(pid_t), void (*child_cb)(void));
 pid_t forkproxy_forkExec(ForkProxy* forkproxy, const char* file, char* const argv[],
                          char* const envp[]);
 
-// Destroy the forkproxy, including stopping its thread and freeing its memory.
-// Doesn't kill processes that were started by the ForkProxy, but will result
-// in them being re-parented if they're still alive.
-void forkproxy_delete(ForkProxy* forkproxy);
-
 #endif
