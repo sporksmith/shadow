@@ -29,7 +29,7 @@ struct _ForkProxy {
     pid_t child_pid;
 };
 
-static int _sem_wait_ignoring_interrupts(sem_t *sem) {
+static int _sem_wait_ignoring_interrupts(sem_t* sem) {
     int rv;
     do {
         rv = sem_wait(sem);
