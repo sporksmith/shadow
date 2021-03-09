@@ -396,6 +396,11 @@ static pid_t _threadptrace_fork_exec(const char* file, char* const argv[], char*
         if (ptrace(PTRACE_DETACH, pid, 0, SIGSTOP) < 0) {
             error("ptrace: %s", g_strerror(errno));
         }
+    } else {
+        // XXX hack
+        if (ptrace(PTRACE_SETOPTIONS, pid, 0, THREADPTRACE_PTRACE_OPTIONS) < 0) {
+            error("ptrace: %s", strerror(errno));
+        }
     }
     return pid;
 }
