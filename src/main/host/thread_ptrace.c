@@ -61,6 +61,8 @@ OPTION_EXPERIMENTAL_ENTRY("kernel-has-multithread-ptrace", 0, 0, G_OPTION_ARG_NO
 
 static char SYSCALL_INSTRUCTION[] = {0x0f, 0x05};
 
+static long _attachCount = 0;
+
 // Number of times to do a non-blocking wait while waiting for traced thread.
 #define THREADPTRACE_MAX_SPIN 8096
 
@@ -811,6 +813,8 @@ static void threadptrace_flushPtrs(Thread* base) {
 
 static void _threadptrace_doAttach(ThreadPtrace* thread) {
     debug("thread %i attaching to child %i", thread->base.tid, (int)thread->base.nativeTid);
+    __atomic_add_fetch (&_attachCount, 1, __ATOMIC_RELAXED);
+
     if (ptrace(PTRACE_ATTACH, thread->base.nativeTid, 0, 0) < 0) {
         error("ptrace: %s", g_strerror(errno));
         abort();
@@ -1131,6 +1135,8 @@ int threadptrace_getReturnCode(Thread* base) {
 
 void threadptrace_free(Thread* base) {
     ThreadPtrace* thread = _threadToThreadPtrace(base);
+
+    message("Attach count %ld", _attachCount);
 
     if (thread->sys) {
         syscallhandler_unref(thread->sys);
