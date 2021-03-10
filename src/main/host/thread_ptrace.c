@@ -1006,7 +1006,7 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                 debug("THREAD_PTRACE_CHILD_STATE_IPC_SYSCALL");
                 SysCallCondition* condition = _threadptrace_resumeIpcSyscall(thread, &changedState);
                 if (condition) {
-                    if (_useONWaitpidWorkarounds) {
+                    if (_useONWaitpidWorkarounds && !_kernelHasMultithreadPtrace) {
                         // Keep inactive plugins off worker thread's tracee
                         // list.
                         _threadptrace_doDetach(thread);
@@ -1019,7 +1019,7 @@ SysCallCondition* threadptrace_resume(Thread* base) {
                 debug("THREAD_PTRACE_CHILD_STATE_SYSCALL");
                 SysCallCondition* condition = _threadptrace_resumeSyscall(thread, &changedState);
                 if (condition) {
-                    if (_useONWaitpidWorkarounds) {
+                    if (_useONWaitpidWorkarounds && !_kernelHasMultithreadPtrace) {
                         // Keep inactive plugins off worker thread's tracee
                         // list.
                         _threadptrace_doDetach(thread);
