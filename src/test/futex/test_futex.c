@@ -48,8 +48,17 @@ static void* _futex_wait_test_child(void* void_arg) {
     FutexWaitTestChildArg* arg = void_arg;
     _set_condition(&arg->child_started);
     trace("Child about to wait");
-    assert_true_errno(!syscall(SYS_futex, &arg->futex, FUTEX_WAIT, UNAVAILABLE, NULL, NULL, 0) ||
-                      (errno == EAGAIN && !running_in_shadow()));
+    while (1) {
+        long rv = syscall(SYS_futex, &arg->futex, FUTEX_WAIT, UNAVAILABLE, NULL, NULL, 0);
+        if (rv == 0) {
+            break;
+        }
+        // Shouldn't get here under Shadow, but can get EAGAIN when run natively.
+        g_assert_cmpint(rv, ==, -1);
+        assert_errno_is(EAGAIN);
+        g_assert_true(running_in_shadow());
+        trace("Got EAGAIN; looping");
+    }
     trace("Child returned from wait");
     __sync_synchronize();
     g_assert_cmpint(arg->futex, ==, AVAILABLE);
@@ -168,9 +177,17 @@ static void* _futex_wait_bitset_test_child(void* void_arg) {
     FutexWaitBitsetTestChildArg* arg = void_arg;
     _set_condition(&arg->child_started);
     trace("Child %d about to wait", arg->id);
-    assert_true_errno(
-        !syscall(SYS_futex, arg->futex, FUTEX_WAIT_BITSET, UNAVAILABLE, NULL, NULL, 1 << arg->id) ||
-        (errno == EAGAIN && !running_in_shadow()));
+    while (1) {
+        long rv = syscall(SYS_futex, arg->futex, FUTEX_WAIT_BITSET, UNAVAILABLE, NULL, NULL, 1 << arg->id);
+        if (rv == 0) {
+            break;
+        }
+        // Shouldn't get here under Shadow, but can get EAGAIN when run natively.
+        g_assert_cmpint(rv, ==, -1);
+        assert_errno_is(EAGAIN);
+        g_assert_true(running_in_shadow());
+        trace("Got EAGAIN; looping");
+    }
     trace("Child %d returned from wait", arg->id);
     g_assert_cmpint(__atomic_load_n(arg->futex, __ATOMIC_ACQUIRE), ==, AVAILABLE);
     _set_condition(&arg->child_finished);
