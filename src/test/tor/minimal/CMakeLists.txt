@@ -24,11 +24,11 @@ add_shadow_tests(BASENAME tor-minimal
                  LOGLEVEL info
                  ARGS
                    --use-cpu-pinning true
-                   --parallelism 2
+                   --parallelism 4
                    --template-directory "shadow.data.template"
                  POST_CMD "${CMAKE_CURRENT_SOURCE_DIR}/verify.sh"
                  PROPERTIES
-                   TIMEOUT 180
+                   TIMEOUT 18000
                    RUN_SERIAL TRUE
                    LABELS tor
                    CONFIGURATIONS extra)

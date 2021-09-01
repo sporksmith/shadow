@@ -17,13 +17,8 @@
     <node id="pause">
       <data key="d0">1,2,3,4,5,6,7,8,9,10</data>
     </node>
-    <node id="end">
-      <data key="d1">10</data>
-      <data key="d0">3600</data>
-    </node>
     <edge source="start" target="stream" />
-    <edge source="stream" target="end" />
-    <edge source="end" target="pause" />
+    <edge source="stream" target="pause" />
     <edge source="pause" target="start" />
   </graph>
 </graphml>

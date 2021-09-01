@@ -1,5 +1,5 @@
 general:
-  stop_time: 30 min
+  stop_time: 2000 min
 network:
   graph:
     type: gml
@@ -68,12 +68,13 @@ hosts:
       args: --Address relay2 --Nickname relay2
             --defaults-torrc torrc-defaults -f torrc
       start_time: 60
-  client:
-    processes:
-    - path: ~/.local/bin/tgen
-      args: ../../../conf/tgen.client.graphml.xml
-      start_time: 600
+#  client:
+#    processes:
+#    - path: ~/.local/bin/tgen
+#      args: ../../../conf/tgen.client.graphml.xml
+#      start_time: 600
   torclient:
+    quantity: 10
     processes:
     - path: ~/.local/bin/tor
       args: --Address torclient --Nickname torclient

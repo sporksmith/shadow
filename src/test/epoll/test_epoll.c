@@ -67,6 +67,7 @@ static void _test_epoll_wait_noevents_timeout(int timeout_millis) {
 static void _test_epoll_wait() {
     /* test no timeout (immediate return), and 300 millis. */
     _test_epoll_wait_noevents_timeout(0);
+    _test_epoll_wait_noevents_timeout(1);
     _test_epoll_wait_noevents_timeout(300);
 }
 
