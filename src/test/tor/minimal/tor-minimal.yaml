@@ -21,8 +21,12 @@ network:
           packet_loss 0.0
         ]
       ]
+host_defaults:
+  log_level: info
 hosts:
   fileserver:
+    options:
+      log_level: trace
     processes:
     - path: ~/.local/bin/tgen
       args: ../../../conf/tgen.server.graphml.xml

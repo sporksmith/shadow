@@ -137,6 +137,8 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
     gint maxevents = args->args[2].as_i64;
     gint timeout_ms = args->args[3].as_i64;
 
+    trace("epoll_wait(%d, %p, %d, %d)", epfd, (void*)eventsPtr.val, maxevents, timeout_ms);
+
     /* Check input args. */
     if (maxevents <= 0) {
         trace("Maxevents %i is not greater than 0.", maxevents);
@@ -192,9 +194,14 @@ SysCallReturn syscallhandler_epoll_wait(SysCallHandler* sys,
 
             /* Set timeout, if provided. */
             if (timeout_ms > 0) {
+                EmulatedTime timeout = worker_getEmulatedTime() + timeout_ms * SIMTIME_ONE_MILLISECOND;
+                trace("Setting timeout %ld)", timeout);
+
                 syscallcondition_setTimeout(
                     cond, sys->host,
-                    worker_getEmulatedTime() + timeout_ms * SIMTIME_ONE_MILLISECOND);
+                    timeout);
+            } else {
+                trace("Blocking without timeout");
             }
 
             return (SysCallReturn){.state = SYSCALL_BLOCK, .cond = cond};
