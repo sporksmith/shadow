@@ -11,3 +11,6 @@ options. See https://github.com/shadow/shadow/issues/1945
 
 * Fixed behavior when multiple threads are blocked in `epoll_wait` on the same epoll
   file description. https://github.com/shadow/shadow/issues/2260
+
+* Fixed a panic when patching the VDSO in newer kernels, such as those in Ubuntu 22.04.
+  https://github.com/shadow/shadow/issues/2273
