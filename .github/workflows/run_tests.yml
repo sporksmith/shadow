@@ -19,19 +19,15 @@ env:
 
 jobs:
   shadow:
-    # use the oldest kernel supported by github's CI (make sure to update the
-    # minimum supported kernel version in documentation when changing)
-    # https://github.com/actions/virtual-environments
-    runs-on: ubuntu-18.04
-    container:
-      image: ${{ matrix.container }}
-      # the default shm-size for ubuntu:18.04, but with the size increased from
-      # 65536k. github's default docker seccomp policy seems to disallow
-      # process_vm_readv and process_vm_writev; disable it altogether. See
-      # https://docs.docker.com/engine/security/seccomp/
-      options: '--shm-size="1g" --security-opt seccomp=unconfined'
     strategy:
       matrix:
+        image:
+          # Oldest-available kernel from
+          # https://github.com/actions/virtual-environments
+          - ubuntu-18.04
+          # Newest-available kernel from
+          # https://github.com/actions/virtual-environments
+          - ubuntu-22.04
         container:
           # End of standard support: April 2023 https://wiki.ubuntu.com/Releases
           - 'ubuntu:18.04'
@@ -62,6 +58,14 @@ jobs:
           # https://github.com/shadow/shadow/issues/1741
           - container: 'fedora:35'
             cc: clang
+    runs-on: ${{ matrix.image }}
+    container:
+      image: ${{ matrix.container }}
+      # the default shm-size for ubuntu:18.04, but with the size increased from
+      # 65536k. github's default docker seccomp policy seems to disallow
+      # process_vm_readv and process_vm_writev; disable it altogether. See
+      # https://docs.docker.com/engine/security/seccomp/
+      options: '--shm-size="1g" --security-opt seccomp=unconfined'
     env:
       CC: ${{ matrix.cc }}
       CONTAINER: ${{ matrix.container }}
