@@ -173,6 +173,8 @@ EOF
          && echo 'Changes (see https://stackoverflow.com/a/36851784 for details):' \
          && rsync --delete --exclude-from=.dockerignore --itemize-changes -c -rlpgoD --no-owner --no-group /mnt/shadow/ . \
          && echo '' \
+         && ci/container_scripts/install_deps.sh \
+         && ci/container_scripts/install_extra_deps.sh \
          && ci/container_scripts/build_and_install.sh \
          && ci/container_scripts/test.sh")"
 
