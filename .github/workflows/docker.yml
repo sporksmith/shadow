@@ -53,16 +53,11 @@ jobs:
         # Replace all forward slashes with '-'
         CONTAINER_FOR_TAG="${CONTAINER_FOR_TAG//\//-}"
 
+        # Get base image before logging in
+        docker pull ${{ matrix.container }}
 
-        for BUILDTYPE in debug release; do
-        for CC in gcc clang; do
-          # FIXME: use a shadow dockerhub account
-          TAG="sporksmith/shadow-ci:$CONTAINER_FOR_TAG-$CC-$BUILDTYPE"
-          echo "building image $TAG"
-          docker build . -t "${TAG}" --shm-size="1g"
-          docker run --shm-size="1g" --security-opt=seccomp=unconfined --privileged --rm --entrypoint /src/ci/container_scripts/test.sh --build-arg "CONTAINER=${{ matrix.container }},CC=$CC,BUILDTYPE=$BUILDTYPE" "${TAG}"
-          # FIXME
-          docker login -u sporksmith --password "${{ secrets.DOCKERHUB_TOKEN }}"
-          docker push "${TAG}"
-        done
-        done
+        # log in so that we can push
+        docker login -u sporksmith --password "${{ secrets.DOCKERHUB_TOKEN }}"
+
+        # build, test, and push images
+        ci/run.sh -p -c "${{ matrix.container }}" -C "gcc;clang" -b "debug;release" -e ""
