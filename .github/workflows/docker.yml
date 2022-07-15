@@ -52,7 +52,7 @@ jobs:
         ref: ${{ github.event.pull_request.head.sha }}
     - run: |
         # Replace the single ':' with a '-'
-        CONTAINER_FOR_TAG=${container/:/-}
+        CONTAINER_FOR_TAG=${${{ container }}/:/-}
         # Replace all forward slashes with '-'
         CONTAINER_FOR_TAG="${CONTAINER_FOR_TAG//\//-}"
         # FIXME: use a shadow dockerhub account
