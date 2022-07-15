@@ -24,7 +24,7 @@ jobs:
     # https://github.com/actions/virtual-environments
     runs-on: ubuntu-18.04
     container:
-      image: ${{ matrix.container }}
+      image: sporksmith/shadow-ci:${{ matrix.container }}-${{ matrix.cc}}-${{ matrix.buildtype }}
       # the default shm-size for ubuntu:18.04, but with the size increased from
       # 65536k. github's default docker seccomp policy seems to disallow
       # process_vm_readv and process_vm_writev; disable it altogether. See
@@ -34,22 +34,22 @@ jobs:
       matrix:
         container:
           # End of standard support: April 2023 https://wiki.ubuntu.com/Releases
-          - 'ubuntu:18.04'
-          # End of standard support: April 2025 https://wiki.ubuntu.com/Releases
-          - 'ubuntu:20.04'
-          # End of standard support: July 2022 https://wiki.ubuntu.com/Releases
-          - 'ubuntu:21.10'
-          # End of standard support: April 2027 https://wiki.ubuntu.com/Releases
-          - 'ubuntu:22.04'
-          # EOL ~August 2022 https://wiki.debian.org/DebianReleases
-          - 'debian:10-slim'
-          - 'debian:11-slim'
-          # EOL June 7 2022 https://endoflife.date/fedora
-          - 'fedora:34'
-          - 'fedora:35'
-          - 'fedora:36'
-          # EOL May 2024 https://www.centos.org/centos-stream/
-          - 'quay.io/centos/centos:stream8'
+          - 'ubuntu-18.04'
+#          # End of standard support: April 2025 https://wiki.ubuntu.com/Releases
+#          - 'ubuntu:20.04'
+#          # End of standard support: July 2022 https://wiki.ubuntu.com/Releases
+#          - 'ubuntu:21.10'
+#          # End of standard support: April 2027 https://wiki.ubuntu.com/Releases
+#          - 'ubuntu:22.04'
+#          # EOL ~August 2022 https://wiki.debian.org/DebianReleases
+#          - 'debian:10-slim'
+#          - 'debian:11-slim'
+#          # EOL June 7 2022 https://endoflife.date/fedora
+#          - 'fedora:34'
+#          - 'fedora:35'
+#          - 'fedora:36'
+#          # EOL May 2024 https://www.centos.org/centos-stream/
+#          - 'quay.io/centos/centos:stream8'
         cc: ['gcc', 'clang']
         buildtype: ['debug', 'release']
         exclude:
@@ -78,29 +78,10 @@ jobs:
           # date with target branch before merging, anyway.
           # See https://github.com/shadow/shadow/issues/2166
           ref: ${{ github.event.pull_request.head.sha }}
-
-      - name: Get month
-        id: get-month
-        run: |
-          echo "::set-output name=month::$(/bin/date -u "+%Y%m")"
-
-      - name: Install dependencies
-        run: |
-          . ci/container_scripts/install_deps.sh
-          . ci/container_scripts/install_extra_deps.sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-
-      - name: Restore cargo registry cache
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          # invalidate the cache once per month
-          key: cargo-registry-${{ steps.get-month.outputs.month }}
-          restore-keys: |
-            cargo-registry-
+          path: /mnt/shadow 
+      
+      - name: Update code
+        run: rsync --delete --exclude-from=.dockerignore --itemize-changes -a --no-owner --no-group /mnt/shadow/ .
 
       - name: Build
         run: . ci/container_scripts/build_and_install.sh
