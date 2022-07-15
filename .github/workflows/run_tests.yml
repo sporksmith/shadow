@@ -23,13 +23,6 @@ jobs:
     # minimum supported kernel version in documentation when changing)
     # https://github.com/actions/virtual-environments
     runs-on: ubuntu-18.04
-    container:
-      image: sporksmith/shadow-ci:${{ matrix.container }}-${{ matrix.cc}}-${{ matrix.buildtype }}
-      # the default shm-size for ubuntu:18.04, but with the size increased from
-      # 65536k. github's default docker seccomp policy seems to disallow
-      # process_vm_readv and process_vm_writev; disable it altogether. See
-      # https://docs.docker.com/engine/security/seccomp/
-      options: '--shm-size="1g" --security-opt seccomp=unconfined'
     strategy:
       matrix:
         container:
@@ -80,21 +73,8 @@ jobs:
           # See https://github.com/shadow/shadow/issues/2166
           ref: ${{ github.event.pull_request.head.sha }}
       
-      - name: Update code
-        run: |
-          rsync --delete --exclude-from=.dockerignore --itemize-changes -a --no-owner --no-group . /root/shadow
-
-      - name: Update deps
-        run: |
-          cd /root/shadow
-          ci/container_scripts/install_deps.sh
-          ci/container_scripts/install_extra_deps.sh
-
-      - name: Build
-        run: cd /root/shadow && . ci/container_scripts/build_and_install.sh
-
-      - name: Test
-        run: cd /root/shadow && . ci/container_scripts/test.sh
+      - name: Run
+        run: ci/run.sh -c "${{ matrix.container }}" -C "${{ matrix.cc }}" -b "${{ matrix.buildtype }}"
 
       - name: Move results
         if: always()
