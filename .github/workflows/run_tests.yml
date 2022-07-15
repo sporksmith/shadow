@@ -79,19 +79,22 @@ jobs:
           # date with target branch before merging, anyway.
           # See https://github.com/shadow/shadow/issues/2166
           ref: ${{ github.event.pull_request.head.sha }}
-          path: shadow-head
       
       - name: Update code
         run: |
-          mv /root/shadow .
-          cd shadow
-          rsync --delete --exclude-from=.dockerignore --itemize-changes -a --no-owner --no-group ../shadow-head/ .
+          rsync --delete --exclude-from=.dockerignore --itemize-changes -a --no-owner --no-group . /root/shadow
+
+      - name: Update deps
+        run: |
+          cd /root/shadow
+          ci/container_scripts/install_deps.sh
+          ci/container_scripts/install_extra_deps.sh
 
       - name: Build
-        run: cd shadow && . ci/container_scripts/build_and_install.sh
+        run: cd /root/shadow && . ci/container_scripts/build_and_install.sh
 
       - name: Test
-        run: cd shadow && . ci/container_scripts/test.sh
+        run: cd /root/shadow && . ci/container_scripts/test.sh
 
       - name: Compress logs
         if: failure()
@@ -100,16 +103,20 @@ jobs:
           tar -cJf shadow/build/Testing/Temporary{.tar.xz,/}
           for f in shadow/build/**/*.data; do tar -cJf "$f.tar.xz" "$f/"; done
 
+      - name: Move results
+        if: always()
+        run: if [ -d /root/shadow/build ]; then mv /root/shadow/build .; fi
+
       - name: Upload shadow data directories
         uses: actions/upload-artifact@v3
         if: failure()
         with:
           name: shadow-data-dirs
-          path: shadow/build/**/*.data.tar.xz
+          path: build/**/*.data.tar.xz
 
       - name: Upload shadow log file
         uses: actions/upload-artifact@v3
         if: failure()
         with:
           name: shadow-log-file
-          path: shadow/build/Testing/Temporary.tar.xz
+          path: build/Testing/Temporary.tar.xz
