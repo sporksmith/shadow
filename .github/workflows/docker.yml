@@ -32,9 +32,6 @@ jobs:
 #          # EOL May 2024 https://www.centos.org/centos-stream/
 #          - 'quay.io/centos/centos:stream8'
 
-    # use the oldest kernel supported by github's CI (make sure to update the
-    # minimum supported kernel version in documentation when changing)
-    # https://github.com/actions/virtual-environments
     runs-on: ubuntu-18.04
 
     steps:
@@ -47,12 +44,6 @@ jobs:
         # See https://github.com/shadow/shadow/issues/2166
         ref: ${{ github.event.pull_request.head.sha }}
     - run: |
-        CONTAINER=${{ matrix.container }}
-        # Replace the single ':' with a '-'
-        CONTAINER_FOR_TAG=${CONTAINER/:/-}
-        # Replace all forward slashes with '-'
-        CONTAINER_FOR_TAG="${CONTAINER_FOR_TAG//\//-}"
-
         # Get base image before logging in
         docker pull ${{ matrix.container }}
 
