@@ -5,6 +5,7 @@
 set -euo pipefail
 
 BUILD_IMAGES=0
+PUSH=0
 
 CONTAINERS=(
     ubuntu:18.04
