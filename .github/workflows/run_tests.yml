@@ -79,34 +79,37 @@ jobs:
           # date with target branch before merging, anyway.
           # See https://github.com/shadow/shadow/issues/2166
           ref: ${{ github.event.pull_request.head.sha }}
-          path: /mnt/shadow 
+          path: shadow-head
       
       - name: Update code
-        run: rsync --delete --exclude-from=.dockerignore --itemize-changes -a --no-owner --no-group /mnt/shadow/ .
+        run: |
+          mv /root/shadow .
+          cd shadow
+          rsync --delete --exclude-from=.dockerignore --itemize-changes -a --no-owner --no-group ../shadow-head/ .
 
       - name: Build
-        run: . ci/container_scripts/build_and_install.sh
+        run: cd shadow && . ci/container_scripts/build_and_install.sh
 
       - name: Test
-        run: . ci/container_scripts/test.sh
+        run: cd shadow && . ci/container_scripts/test.sh
 
       - name: Compress logs
         if: failure()
         run: |
           shopt -s globstar
-          tar -cJf build/Testing/Temporary{.tar.xz,/}
-          for f in build/**/*.data; do tar -cJf "$f.tar.xz" "$f/"; done
+          tar -cJf shadow/build/Testing/Temporary{.tar.xz,/}
+          for f in shadow/build/**/*.data; do tar -cJf "$f.tar.xz" "$f/"; done
 
       - name: Upload shadow data directories
         uses: actions/upload-artifact@v3
         if: failure()
         with:
           name: shadow-data-dirs
-          path: build/**/*.data.tar.xz
+          path: shadow/build/**/*.data.tar.xz
 
       - name: Upload shadow log file
         uses: actions/upload-artifact@v3
         if: failure()
         with:
           name: shadow-log-file
-          path: build/Testing/Temporary.tar.xz
+          path: shadow/build/Testing/Temporary.tar.xz
