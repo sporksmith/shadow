@@ -34,7 +34,7 @@ jobs:
       matrix:
         container:
           # End of standard support: April 2023 https://wiki.ubuntu.com/Releases
-          - 'ubuntu-18.04'
+          - 'ubuntu:18.04'
 #          # End of standard support: April 2025 https://wiki.ubuntu.com/Releases
 #          - 'ubuntu:20.04'
 #          # End of standard support: July 2022 https://wiki.ubuntu.com/Releases
@@ -96,16 +96,16 @@ jobs:
       - name: Test
         run: cd /root/shadow && . ci/container_scripts/test.sh
 
+      - name: Move results
+        if: always()
+        run: if [ -d /root/shadow/build ]; then mv /root/shadow/build .; fi
+
       - name: Compress logs
         if: failure()
         run: |
           shopt -s globstar
-          tar -cJf shadow/build/Testing/Temporary{.tar.xz,/}
-          for f in shadow/build/**/*.data; do tar -cJf "$f.tar.xz" "$f/"; done
-
-      - name: Move results
-        if: always()
-        run: if [ -d /root/shadow/build ]; then mv /root/shadow/build .; fi
+          tar -cJf build/Testing/Temporary{.tar.xz,/}
+          for f in build/**/*.data; do tar -cJf "$f.tar.xz" "$f/"; done
 
       - name: Upload shadow data directories
         uses: actions/upload-artifact@v3
