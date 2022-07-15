@@ -74,7 +74,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
       
       - name: Run
-        run: ci/run.sh -c "${{ matrix.container }}" -C "${{ matrix.cc }}" -b "${{ matrix.buildtype }}"
+        run: ci/run.sh -c "${{ matrix.container }}" -C "${{ matrix.cc }}" -b "${{ matrix.buildtype }}" -e ""
 
       - name: Move results
         if: always()
