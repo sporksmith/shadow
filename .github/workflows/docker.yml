@@ -5,17 +5,36 @@ name: Build Docker
 permissions: read-all
 
 on:
-  push:
-    branches: [main]
+  # FIXME: drop on pull_request
   pull_request:
     types: [opened, synchronize]
-
+  push:
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
   build:
-    # use the oldest kernel supported by github's CI (make sure to update the
-    # minimum supported kernel version in documentation when changing)
-    # https://github.com/actions/virtual-environments
+    strategy:
+      matrix:
+        container:
+          # End of standard support: April 2023 https://wiki.ubuntu.com/Releases
+          - 'ubuntu:18.04'
+#          # End of standard support: April 2025 https://wiki.ubuntu.com/Releases
+#          - 'ubuntu:20.04'
+#          # End of standard support: July 2022 https://wiki.ubuntu.com/Releases
+#          - 'ubuntu:21.10'
+#          # End of standard support: April 2027 https://wiki.ubuntu.com/Releases
+#          - 'ubuntu:22.04'
+#          # EOL ~August 2022 https://wiki.debian.org/DebianReleases
+#          - 'debian:10-slim'
+#          - 'debian:11-slim'
+#          # EOL June 7 2022 https://endoflife.date/fedora
+#          - 'fedora:34'
+#          - 'fedora:35'
+#          - 'fedora:36'
+#          # EOL May 2024 https://www.centos.org/centos-stream/
+#          - 'quay.io/centos/centos:stream8'
+
     runs-on: ubuntu-18.04
 
     steps:
@@ -28,5 +47,11 @@ jobs:
         # See https://github.com/shadow/shadow/issues/2166
         ref: ${{ github.event.pull_request.head.sha }}
     - run: |
-        docker build . -t shadow --shm-size="1g"
-        docker run --shm-size="1g" --privileged --rm --entrypoint /src/ci/container_scripts/test.sh shadow
+        # Get base image before logging in
+        docker pull ${{ matrix.container }}
+
+        # log in so that we can push
+        docker login -u sporksmith --password "${{ secrets.DOCKERHUB_TOKEN }}"
+
+        # build, test, and push images
+        ci/run.sh -i -p -c "${{ matrix.container }}" -C "gcc clang" -b "debug release" -e ""

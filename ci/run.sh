@@ -5,6 +5,7 @@
 set -euo pipefail
 
 BUILD_IMAGES=0
+PUSH=0
 
 CONTAINERS=(
     ubuntu:18.04
@@ -45,6 +46,7 @@ Usage: $0 ...
   -e EXTRAS      Set extra configurations to run
   -o             Set only configurations to run
   -n             nocache when building Docker images
+  -p             pushes images to dockerhub if set
 
 On the first run, you should use the '-i' flag to build the images.
 
@@ -72,7 +74,7 @@ Set *only* configurations to run:
 EOF
 }
 
-while getopts "h?ic:C:b:e:o:n" opt; do
+while getopts "h?ipc:C:b:e:o:n" opt; do
     case "$opt" in
     h|\?)
         show_help
@@ -95,6 +97,8 @@ while getopts "h?ic:C:b:e:o:n" opt; do
         ;;
     n)  NOCACHE=--no-cache
         ;;
+    p)  PUSH=1
+        ;;
     esac
 done
 
@@ -108,7 +112,8 @@ run_one () {
     # Replace all forward slashes with '-'
     CONTAINER_FOR_TAG="${CONTAINER_FOR_TAG//\//-}"
 
-    TAG="shadow:$CONTAINER_FOR_TAG-$CC-$BUILDTYPE"
+    # FIXME
+    TAG="sporksmith/shadow-ci:$CONTAINER_FOR_TAG-$CC-$BUILDTYPE"
 
     if [ "${BUILD_IMAGES}" == "1" ]; then
         echo "Building $TAG"
@@ -166,7 +171,7 @@ EOF
     CONTAINER_ID="$(docker create ${DOCKER_CREATE_FLAGS[@]} ${TAG} /bin/bash -c \
         "echo '' \
          && echo 'Changes (see https://stackoverflow.com/a/36851784 for details):' \
-         && rsync --delete --exclude-from=.dockerignore --itemize-changes -a --no-owner --no-group /mnt/shadow/ . \
+         && rsync --delete --exclude-from=.dockerignore --itemize-changes -c -rlpgoD --no-owner --no-group /mnt/shadow/ . \
          && echo '' \
          && ci/container_scripts/build_and_install.sh \
          && ci/container_scripts/test.sh")"
@@ -182,6 +187,10 @@ EOF
     if [ "${RV}" != "0" ]; then
         echo "Exiting due to docker container failure (${TAG})"
         exit 1
+    fi
+
+    if [ "${PUSH}" == "1" ]; then
+        docker push "${TAG}"
     fi
 }
 
