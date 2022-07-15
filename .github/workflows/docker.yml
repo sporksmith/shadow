@@ -65,6 +65,6 @@ jobs:
           docker run --shm-size="1g" --privileged --rm --entrypoint /src/ci/container_scripts/test.sh --build-arg "CONTAINER=${{ matrix.container }},CC=$CC,BUILDTYPE=$BUILDTYPE" "${TAG}"
           # FIXME
           docker login -u sporksmith --password "${{ secrets.DOCKERHUB_TOKEN }}"
-          docker push "${TAG}""
+          docker push "${TAG}"
         done
         done
