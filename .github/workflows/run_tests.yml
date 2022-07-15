@@ -50,7 +50,8 @@ jobs:
 #          - 'fedora:36'
 #          # EOL May 2024 https://www.centos.org/centos-stream/
 #          - 'quay.io/centos/centos:stream8'
-        cc: ['gcc', 'clang']
+# FIXME
+        cc: ['gcc']
         buildtype: ['debug', 'release']
         exclude:
           # https://github.com/shadow/shadow/issues/1741
