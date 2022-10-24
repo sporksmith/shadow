@@ -133,16 +133,16 @@ impl<'sched, 'pool, 'scope> SchedulerScope<'sched, 'pool, 'scope> {
 
 /// Supports iterating over all hosts assigned to this thread.
 pub enum HostIter<'a, 'b> {
-    ThreadPerHost(&'a mut thread_per_host::HostIter<'b>),
+    ThreadPerHost(&'a mut thread_per_host::HostIter),
     ThreadPerCore(&'a mut thread_per_core::HostIter<'b>),
 }
 
 impl<'a, 'b> HostIter<'a, 'b> {
     /// Get the next host.
-    pub fn next(&mut self) -> Option<&mut Host> {
+    pub fn next(&mut self, prev: Option<Host>) -> Option<Host> {
         match self {
-            Self::ThreadPerHost(x) => x.next(),
-            Self::ThreadPerCore(x) => x.next(),
+            Self::ThreadPerHost(x) => x.next(prev),
+            Self::ThreadPerCore(x) => x.next(prev),
         }
     }
 }

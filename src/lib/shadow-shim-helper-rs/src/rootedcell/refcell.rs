@@ -1,5 +1,8 @@
 use super::{Root, Tag};
-use std::cell::{Cell, UnsafeCell};
+use std::{
+    cell::{Cell, UnsafeCell},
+    fmt::Debug,
+};
 use vasi::VirtualAddressSpaceIndependent;
 
 /// Analagous to [std::cell::RefCell]. In particular like [std::cell::RefCell]
@@ -22,6 +25,20 @@ pub struct RootedRefCell<T> {
 unsafe impl<T> VirtualAddressSpaceIndependent for RootedRefCell<T> where
     T: VirtualAddressSpaceIndependent
 {
+}
+
+impl<T> Debug for RootedRefCell<T>
+where
+    T: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RootedRefCell")
+            .field("tag", &self.tag)
+            .field("val", &self.val)
+            .field("reader_count", &self.reader_count)
+            .field("writer", &self.writer)
+            .finish()
+    }
 }
 
 impl<T> RootedRefCell<T> {

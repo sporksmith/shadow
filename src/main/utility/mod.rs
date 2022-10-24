@@ -71,7 +71,7 @@ impl<T> HostTreePointer<T> {
     /// Create a pointer that may only be accessed when the lock for the current host
     /// is held.
     pub fn new(ptr: *mut T) -> Self {
-        let host_id = Worker::with_active_host_info(|i| i.id);
+        let host_id = Worker::with_active_host(|h| h.info().id);
         Self::new_for_host(host_id.unwrap(), ptr)
     }
 
@@ -89,8 +89,8 @@ impl<T> HostTreePointer<T> {
         // This function is still `unsafe` since it's now the caller's
         // responsibility to not release the lock and *then* dereference the
         // pointer.
-        Worker::with_active_host_info(|i| {
-            assert_eq!(self.host_id, i.id);
+        Worker::with_active_host(|h| {
+            assert_eq!(self.host_id, h.info().id);
         });
         self.ptr
     }
