@@ -222,7 +222,7 @@ fn get_heap(
             .iter()
             .fuse()
             .filter(|m| m.1.original_path == Some(proc_maps::MappingPath::Heap))
-            .last();
+            .last()
         // There should only be one heap region.
         /*
         debug_assert!(
