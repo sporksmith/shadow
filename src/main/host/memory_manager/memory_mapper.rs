@@ -221,6 +221,7 @@ fn get_heap(
         let mut it = regions
             .iter()
             .fuse()
+            .rev()
             .skip_while(|m| m.1.original_path != Some(proc_maps::MappingPath::Heap));
         let heap_mapping = it.next();
         // There should only be one heap region.
