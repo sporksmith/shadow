@@ -193,7 +193,7 @@ pub fn mappings_for_pid(pid: libc::pid_t) -> Result<Vec<Mapping>, Box<dyn Error>
 
     let mut file = File::open(format!("/proc/{}/maps", pid))?;
     let mut contents = String::new();
-    log::info!("proc file {} contents\n{}", pid, mappings);
+    log::info!("proc file {} contents\n{}", pid, contents);
     file.read_to_string(&mut contents)?;
     parse_file_contents(&contents)
 }
