@@ -218,7 +218,7 @@ fn get_heap(
 ) -> Interval {
     // If there's already a region labeled heap, we use those bounds.
     let heap_mapping = {
-        let mut it = regions
+        regions
             .iter()
             .fuse()
             .filter(|m| m.1.original_path == Some(proc_maps::MappingPath::Heap))
