@@ -221,9 +221,8 @@ fn get_heap(
         let mut it = regions
             .iter()
             .fuse()
-            .rev()
-            .skip_while(|m| m.1.original_path != Some(proc_maps::MappingPath::Heap));
-        let heap_mapping = it.next();
+            .filter(|m| m.1.original_path == Some(proc_maps::MappingPath::Heap))
+            .last();
         // There should only be one heap region.
         /*
         debug_assert!(
@@ -232,7 +231,6 @@ fn get_heap(
                 == 0
         );
         */
-        heap_mapping
     };
     if heap_mapping.is_none() {
         // There's no heap region allocated yet. Get the address where it will be and return.
