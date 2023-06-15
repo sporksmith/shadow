@@ -287,7 +287,7 @@ pub struct GeneralOptions {
     /// under Shadow.
     #[clap(long, value_name = "bool")]
     #[clap(help = GENERAL_HELP.get("model_unblocked_syscall_latency").unwrap().as_str())]
-    #[serde(default = "default_some_false")]
+    #[serde(default = "default_some_true")]
     pub model_unblocked_syscall_latency: Option<bool>,
 }
 
