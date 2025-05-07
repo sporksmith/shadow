@@ -538,8 +538,8 @@ impl Default for ExperimentalOptions {
             use_sched_fifo: Some(false),
             use_syscall_counters: Some(true),
             use_object_counters: Some(true),
-            use_preload_libc: Some(true),
-            use_preload_openssl_rng: Some(true),
+            use_preload_libc: Some(false),
+            use_preload_openssl_rng: Some(false),
             use_preload_openssl_crypto: Some(false),
             max_unapplied_cpu_latency: Some(units::Time::new(1, units::TimePrefix::Micro)),
             // 1-2 microseconds is a ballpark estimate of the minimal latency for
