@@ -69,7 +69,9 @@ static void _shim_parent_init_memory_manager() {
     if (shim_getExecutionContext() != EXECUTION_CONTEXT_SHADOW) {
         panic("Unexpectedly called from non-shadow context");
     }
+    _shim_parent_init_memory_manager_internal();
 
+    #if 0
     // Temporarily allocate some memory for a separate stack. The MemoryManager
     // is going to remap the original stack, and we can't actively use it while
     // it does so.
@@ -103,6 +105,7 @@ static void _shim_parent_init_memory_manager() {
     if (munmap(stack, stack_sz) != 0) {
         panic("munmap: %s", strerror(errno));
     }
+        #endif
 }
 
 static void _shim_parent_init_seccomp() {
