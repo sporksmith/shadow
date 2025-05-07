@@ -115,6 +115,7 @@ hosts:
     ip_addr: 100.0.0.100
     processes:
     - path: tor
+      environment: { ASAN_OPTIONS: verify_asan_link_order=0}
       args: --Address ptbridge --Nickname ptbridge
             --BridgeRelay 1
             --ServerTransportPlugin "obfs4 exec /usr/bin/obfs4proxy --enableLogging --logLevel=DEBUG --unsafeLogging"
@@ -164,6 +165,7 @@ hosts:
     network_node_id: 0
     processes:
     - path: tor
+      environment: { ASAN_OPTIONS: verify_asan_link_order=0}
       args: --Address torptbridgeclient --Nickname torptbridgeclient
             --UseBridges 1
             --ClientTransportPlugin "obfs4 exec /usr/bin/obfs4proxy --enableLogging --logLevel=DEBUG --unsafeLogging"
