@@ -452,7 +452,7 @@ extern crate shadow_tsc;
 ///
 /// SAFETY: We ensure that every thread unregisters itself before exiting,
 /// via [`release_and_exit_current_thread`].
-static SHIM_TLS: ThreadLocalStorage = unsafe { ThreadLocalStorage::new(tls::Mode::Native) };
+static SHIM_TLS: ThreadLocalStorage = unsafe { ThreadLocalStorage::new(tls::Mode::NativeTlsId) };
 
 /// Release this thread's shim thread local storage and exit the thread.
 ///
