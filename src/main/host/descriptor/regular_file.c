@@ -290,6 +290,8 @@ int regularfile_openat(RegularFile* file, RegularFile* dir, const char* pathname
      * an absolute path to compare for special files. */
     char* abspath = _regularfile_getAbsolutePath(dir, pathname, workingDir);
 
+    const char* proc_self_prefix = "/proc/self/";
+
     /* Handle special files. */
     if (utility_isRandomPath(abspath)) {
         file->type = FILE_TYPE_RANDOM;
@@ -316,6 +318,19 @@ int regularfile_openat(RegularFile* file, RegularFile* dir, const char* pathname
         char content[] = "0\n";
         // size - 1 to strip the \0;
         return _regularfile_initRoInMemoryFile(file, flags, mode, sizeof(content) - 1, content);
+    } else if (!strncmp(proc_self_prefix, abspath, strlen(proc_self_prefix))) {
+        // XXX not sure about this. Adding to get past mmap check.
+        file->type = FILE_TYPE_REGULAR;
+
+        const Process* proc = worker_getCurrentProcess();
+        pid_t pid = process_getNativePid(proc);
+
+        // XXX calculate size more precisely.
+        char *new_path = malloc(4000);
+        sprintf(new_path, "/proc/%d/%s", pid, &abspath[strlen(proc_self_prefix)]);
+        debug("XXX rewrote '%s' to '%s'", abspath, new_path);
+        free(abspath);
+        abspath = new_path;
     } else {
         file->type = FILE_TYPE_REGULAR;
     }
