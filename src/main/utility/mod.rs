@@ -8,6 +8,7 @@ pub mod macros;
 
 pub mod byte_queue;
 pub mod callback_queue;
+pub mod canonicalize_path;
 pub mod childpid_watcher;
 pub mod counter;
 pub mod give;

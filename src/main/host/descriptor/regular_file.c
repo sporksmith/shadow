@@ -5,6 +5,7 @@
 
 #include "main/host/descriptor/regular_file.h"
 
+#include <asm-generic/errno.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
@@ -209,6 +210,59 @@ static char* _regularfile_getAbsolutePath(RegularFile* dir, const char* pathname
     /* Use current working directory as prefix. */
     char* abspath = _regularfile_getConcatStr(workingDir, '/', pathname);
     return abspath;
+}
+
+static char* _regularfile_getCanonicalPath(RegularFile* dir, const char* pathname,
+                                           const char* workingDir) {
+    char* orig_abspath = _regularfile_getAbsolutePath(dir, pathname, workingDir);
+    char* abspath = orig_abspath;
+
+    // See path_resolution(7).
+    //
+    // We can't just use libc's realpath(3) because:
+    // * We may need to treat intermediate components specially. e.g. when
+    //   resolving /proc/self/* we need to  ... XXX
+    // * We need the option to *not* resolve a final symlink component, for
+    //   implementing readlink.
+    char* rv = malloc(PATH_MAX);
+    int rv_i = 0;
+
+    // First character should always be '/'.
+    utility_alwaysAssert(*(abspath++) == '/');
+    rv[rv_i++] = '/';
+
+    while (1) {
+        char* component = strsep(&abspath, "/");
+
+        // We just processed a separator.
+        if (*component == '/') {
+            // Redundant separator; discard.
+            continue;
+        }
+
+        if (*component == '\0') {
+            // Done. Copy final NULL.
+            if (rv_i >= PATH_MAX) {
+                errno = ENAMETOOLONG;
+                free(orig_abspath);
+                free(rv);
+                free(next_component);
+                return NULL;
+            }
+            rv[rv_i++] = '\0';
+            break;
+        }
+
+
+        char *next_sep = strchr(&abspath[abspath_i], '/');
+        size_t next_component_len = 0;
+        if (next_sep != NULL) {
+
+        }
+    }
+    free(orig_abspath);
+    rv = realloc(rv, rv_i);
+    return rv;
 }
 
 #ifdef DEBUG
