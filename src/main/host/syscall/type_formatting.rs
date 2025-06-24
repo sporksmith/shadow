@@ -278,14 +278,10 @@ fn fmt_string(
     f: &mut std::fmt::Formatter<'_>,
     ptr: ForeignPtr<u8>,
     len: Option<usize>,
-    options: FmtOptions,
+    _options: FmtOptions,
     mem: &MemoryManager,
 ) -> std::fmt::Result {
     const DISPLAY_LEN: usize = 40;
-
-    if options == FmtOptions::Deterministic {
-        return write!(f, "<pointer>");
-    }
 
     // the pointer may point to a buffer of unknown length, so we may have to choose our own size
     let len = len.unwrap_or(
