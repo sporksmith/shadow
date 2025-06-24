@@ -41,6 +41,7 @@ impl SyscallHandler {
         /* rv */ std::ffi::c_int,
         /* fd */ std::ffi::c_int,
         /* offset */ linux_api::types::loff_t,
+        /* len */ linux_api::types::size_t,
         /* advice */ std::ffi::c_int
     );
     pub fn fadvise64(ctx: &mut SyscallContext) -> SyscallResult {
@@ -63,9 +64,7 @@ impl SyscallHandler {
         fchmod,
         /* rv */ std::ffi::c_int,
         /* fd */ std::ffi::c_int,
-        /* filename */ SyscallStringArg,
         /* mode */ linux_api::types::umode_t,
-        /* flags */ std::ffi::c_uint
     );
     pub fn fchmod(ctx: &mut SyscallContext) -> SyscallResult {
         Self::legacy_syscall(cshadow::syscallhandler_fchmod, ctx)
@@ -107,7 +106,11 @@ impl SyscallHandler {
         flistxattr,
         /* rv */ std::ffi::c_int,
         /* fd */ std::ffi::c_int,
-        /* list */ SyscallStringArg,
+        /* This is actually a *list* of strings: "The list is the set of
+         * (null-terminated) names, one after the other."
+         * TODO: log the whole list instead of just the first element */
+        /* list */
+        SyscallStringArg,
         /* size */ linux_api::types::size_t
     );
     pub fn flistxattr(ctx: &mut SyscallContext) -> SyscallResult {
